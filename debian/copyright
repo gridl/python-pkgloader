@@ -1,0 +1,8 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: skytools
+Source: https://github.com/pgq/python-pkgloader
+
+Files: *
+Copyright: Copyright (c) 2007-2016, Skytools Authors
+License: ISC
+
