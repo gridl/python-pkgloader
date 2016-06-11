@@ -1,35 +1,81 @@
-"""Loader for Skytools modules.
+"""Loader for versioned modules.
 
 Primary idea is to allow several major versions to co-exists.
 Secondary idea - allow checking minimal minor version.
 
+Based on idea from pygtk.  Assume you have directory
+like this in python path::
+
+    site-packages/
+        gtk/
+          __init__.py
+        gtk-2.0/
+            gtk/
+              __init__.py
+        gtk-3.0/
+            gtk/
+              __init__.py
+
+Then
+
+    import pkgloader
+    pkgloader.require('gtk', '2.0')
+    import gtk
+
+Should loader 'gtk' module under gtk-2.0 directory and not
+from any other.
+
 """
 
-import sys, os, os.path, re
+from __future__ import division, absolute_import, print_function
+
+import sys
+import os
+import os.path
+import re
 
 __all__ = ['require']
 
-_top = os.path.dirname(os.path.abspath(os.path.normpath(__file__)))
-
 _pkg_cache = None
 _import_cache = {}
-_pat = re.compile('^([a-z]+)-([0-9]+).([0-9]+)$')
+_pat = re.compile(r'^([a-z_]+)-([0-9]+)\.([0-9]+)$')
+
+
+def _str2ver(vstr):
+    parts = tuple([int(n) for n in vstr.split('.')] + [0, 0])
+    return parts[:2]
+
+
+def _ver2str(parts):
+    return '.'.join([str(n) for n in parts])
+
 
 def _load_pkg_cache():
     global _pkg_cache
     if _pkg_cache is not None:
         return _pkg_cache
     _pkg_cache = {}
-    for dir in os.listdir(_top):
-        m = _pat.match(dir)
-        if not m:
+    seen = set()
+    for topdir in sys.path:
+        if not os.path.isdir(topdir):
             continue
-        modname = m.group(1)
-        modver = (int(m.group(2)), int(m.group(3)))
-        _pkg_cache.setdefault(modname, []).append((modver, dir))
-    for vlist in _pkg_cache.itervalues():
-        vlist.sort(reverse = True)
+        for dirname in os.listdir(topdir):
+            m = _pat.match(dirname)
+            if not m:
+                continue
+            if dirname in seen:
+                continue
+            fullpath = os.path.join(topdir, dirname)
+            if not os.path.isdir(fullpath):
+                continue
+            modname = m.group(1)
+            modver = (int(m.group(2)), int(m.group(3)))
+            _pkg_cache.setdefault(modname, []).append((modver, fullpath))
+            seen.add(dirname)
+    for vlist in _pkg_cache.values():
+        vlist.sort(reverse=True)
     return _pkg_cache
+
 
 def _install_path(pkg, newpath):
     for p in sys.path:
@@ -39,17 +85,17 @@ def _install_path(pkg, newpath):
             sys.path.remove(p)
     sys.path.insert(0, newpath)
 
+
 def require(pkg, reqver):
     # parse arg
-    reqval = tuple([int(n) for n in reqver.split('.')])
-    need = reqval[:2] # cut minor ver
+    need = _str2ver(reqver)
 
     # check if we already have one installed
     if pkg in _import_cache:
         got = _import_cache[pkg]
-        if need[0] != got[0] or reqval > got:
+        if need[0] != got[0] or need > got:
             raise ImportError("Request for package '%s' ver '%s', have '%s'" % (
-                              pkg, reqver, '.'.join(got)))
+                              pkg, reqver, _ver2str(got)))
         return
 
     # pick best ver from available ones
@@ -59,25 +105,22 @@ def require(pkg, reqver):
 
     for pkgver, pkgdir in cache[pkg]:
         if pkgver[0] == need[0] and pkgver >= need:
-            # install the best on
-            _install_path(pkg, os.path.join(_top, pkgdir))
+            # install the best one
+            _install_path(pkg, pkgdir)
             break
 
-    inst_ver = reqval
+    inst_ver = need
 
     # now import whatever is available
     mod = __import__(pkg)
 
     # check if it is actually useful
-    ver_str = mod.__version__
-    for i, c in enumerate(ver_str):
-        if c != '.' and not c.isdigit():
-            ver_str = ver_str[:i]
-            break
-    full_ver = tuple([int(x) for x in ver_str.split('.')])
-    if full_ver[0] != reqval[0] or reqval > full_ver:
+    ver_str = getattr(mod, '__version__') or ''
+    ver_str = re.sub('^([0-9.]+).*', r'\1', ver_str)
+    full_ver = _str2ver(ver_str)
+    if full_ver[0] != need[0] or need > full_ver:
         raise ImportError("Request for package '%s' ver '%s', have '%s'" % (
-                          pkg, reqver, '.'.join(full_ver)))
+                          pkg, reqver, _ver2str(full_ver)))
     inst_ver = full_ver
 
     # remember full version
