@@ -1,13 +1,19 @@
-Source: pkgloader
+Source: python-pkgloader
 Section: python
 Priority: optional
 Maintainer: Marko Kreen <markokr@gmail.com>
 Standards-Version: 3.9.2
-Build-Depends: debhelper, python-all, python3-all
+Build-Depends: debhelper (>= 9), dh-python, python-all, python3-all, python-setuptools, python3-setuptools
 X-Python-Version: >= 2.7
-X-Python3-Version: >= 3.1
+X-Python3-Version: >= 3.3
 
 Package: python-pkgloader
+Architecture: all
+Depends: ${misc:Depends}, ${python:Depends}
+Description: Loader for versioned packages
+ .
+
+Package: python3-pkgloader
 Architecture: all
 Depends: ${misc:Depends}, ${python:Depends}
 Description: Loader for versioned packages
