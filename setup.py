@@ -1,6 +1,7 @@
-#! /usr/bin/env python
+"""Setup for pkgloader module.
+"""
 
-from distutils.core import setup
+from setuptools import setup
 
 setup(
     name = "pkgloader",
